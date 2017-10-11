@@ -20,17 +20,28 @@
 #ifndef Adafruit_LEDBackpack_h
 #define Adafruit_LEDBackpack_h
 
+#define ALPHANUM4	// [systronix] this #define added because Adafruit_GFX.h not required for alphanumeric displays
+
 #if (ARDUINO >= 100)
  #include "Arduino.h"
 #else
  #include "WProgram.h"
 #endif
 
-
+#ifdef __AVR_ATtiny85__
+ #include <TinyWireM.h>
+// [systronix] this define modified to support teensy 3.1 and 3.2
+#elif defined (__MK20DX256__) || defined (__MK20DX128__) 	// Teensy 3.1 or 3.2 || Teensy 3.0
+ #include <i2c_t3.h>
+// [systronix] end of modification
+#else
  #include <Wire.h>
-
+#endif
+// [systronix] this #ifdef added because Adafruit_GFX.h not required for alphanumeric displays
+#ifndef ALPHANUM4
 #include "Adafruit_GFX.h"
-
+#endif
+// end of modification
 #define LED_ON 1
 #define LED_OFF 0
 
@@ -66,7 +77,7 @@ class Adafruit_LEDBackpack {
 
   void init(uint8_t a);
  protected:
-  uint8_t i2c_addr;
+  uint8_t i2c_addr;		// [systronix] how is it that this is visible to (the compiler does not error) Adafruit_LEDBackpack::writeDisplay() doesn't use correct value?
 };
 
 class Adafruit_AlphaNum4 : public Adafruit_LEDBackpack {
@@ -81,6 +92,7 @@ class Adafruit_AlphaNum4 : public Adafruit_LEDBackpack {
 
 };
 
+#ifndef ALPHANUM4	// [systronix] not needed for 7 & 14 segment displays
 class Adafruit_24bargraph : public Adafruit_LEDBackpack {
  public:
   Adafruit_24bargraph(void);
@@ -90,19 +102,9 @@ class Adafruit_24bargraph : public Adafruit_LEDBackpack {
  private:
 };
 
-
 class Adafruit_8x16matrix : public Adafruit_LEDBackpack, public Adafruit_GFX {
  public:
   Adafruit_8x16matrix(void);
-
-  void drawPixel(int16_t x, int16_t y, uint16_t color);
-
- private:
-};
-
-class Adafruit_8x16minimatrix : public Adafruit_LEDBackpack, public Adafruit_GFX {
- public:
-  Adafruit_8x16minimatrix(void);
 
   void drawPixel(int16_t x, int16_t y, uint16_t color);
 
@@ -126,7 +128,7 @@ class Adafruit_BicolorMatrix : public Adafruit_LEDBackpack, public Adafruit_GFX 
 
  private:
 };
-
+#endif	// #ifndef ALPHANUM4
 
 #define DEC 10
 #define HEX 16

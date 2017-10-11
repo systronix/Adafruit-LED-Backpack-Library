@@ -18,17 +18,20 @@
   MIT license, all text above must be included in any redistribution
  ****************************************************/
 
-#include <Wire.h>
-
+#include "Adafruit_LEDBackpack.h"
+ 
+/* [systronix] this code duplicates code in Adafruit_LEDBackpack.h; why?
+#ifdef __AVR_ATtiny85__
+ #include <TinyWireM.h>
+ #define Wire TinyWireM
+#else
+ #include <Wire.h>
+#endif
 #include "Adafruit_LEDBackpack.h"
 #include "Adafruit_GFX.h"
-
+*/
 #ifndef _BV
   #define _BV(bit) (1<<(bit))
-#endif
-
-#ifndef _swap_int16_t
-#define _swap_int16_t(a, b) { int16_t t = a; a = b; b = t; }
 #endif
 
 static const uint8_t numbertable[] = {
@@ -50,9 +53,26 @@ static const uint8_t numbertable[] = {
 	0x71, /* F */
 };
 
+// [systronix] apparently, segment definition is not standardized.  What manufacturers & P/Ns match this map?
+//
+// [systronix] digit order? It must have been much too difficult for the original authors to write down in
+// the code somewhere the relative position of the digits on the display and how they relate to the content of
+// displaybuffer[].  Because it must have been too difficult, I'll do it.  It appears that the wiring and
+// buffer mapping is:
+//		U2-2 (COM0) -> LED1-16 displaybuffer[0] - leftmost digit
+//		U2-3 (COM1) -> LED1-11 displaybuffer[1]
+//		U2-4 (COM2) -> LED2-16 displaybuffer[2]
+//		U2-5 (COM3) -> LED1-11 displaybuffer[3] - rightmost digit
+//
+// [systronix] decimal points?  what bit pattern in alphafonttable[] lights the decimal point?
+//		perhaps it is alphafonttable[14]
+//
+// [systronix] why is it that alphafonttable[0] is not 0x0000?  and why is it that alphafonttable[7F] is not
+// 0x7FFF (all segments on including the decimal point)?
+
 static const uint16_t alphafonttable[] PROGMEM =  {
 
-0b0000000000000001,
+0b0000000000000001,		// 0 [systronix] why isn't this value 0x0000? (ascii null)
 0b0000000000000010,
 0b0000000000000100,
 0b0000000000001000,
@@ -62,29 +82,29 @@ static const uint16_t alphafonttable[] PROGMEM =  {
 0b0000000010000000,
 0b0000000100000000,
 0b0000001000000000,
-0b0000010000000000,
+0b0000010000000000,		// 10 / 0x0A
 0b0000100000000000,
 0b0001000000000000,
 0b0010000000000000,
-0b0100000000000000,
+0b0100000000000000,		// 14: digit's decimal point?
 0b1000000000000000,
 0b0000000000000000,
 0b0000000000000000,
 0b0000000000000000,
 0b0000000000000000,
+0b0000000000000000,		// 20 / 0x14
 0b0000000000000000,
 0b0000000000000000,
 0b0000000000000000,
-0b0000000000000000,
-0b0001001011001001,
+0b0001001011001001,	// what are these values?
 0b0001010111000000,
 0b0001001011111001,
 0b0000000011100011,
 0b0000010100110000,
 0b0001001011001000,
-0b0011101000000000,
+0b0011101000000000,		// 30
 0b0001011100000000,
-0b0000000000000000, //  
+0b0000000000000000, // (ascii space - 32 / 0x20)
 0b0000000000000110, // !
 0b0000001000100000, // "
 0b0001001011001110, // #
@@ -92,7 +112,7 @@ static const uint16_t alphafonttable[] PROGMEM =  {
 0b0000110000100100, // %
 0b0010001101011101, // &
 0b0000010000000000, // '
-0b0010010000000000, // (
+0b0010010000000000, // (	//40
 0b0000100100000000, // )
 0b0011111111000000, // *
 0b0001001011000000, // +
@@ -100,9 +120,9 @@ static const uint16_t alphafonttable[] PROGMEM =  {
 0b0000000011000000, // -
 0b0000000000000000, // .
 0b0000110000000000, // /
-0b0000110000111111, // 0
+0b0000110000111111, // 0	/ 0x30
 0b0000000000000110, // 1
-0b0000000011011011, // 2
+0b0000000011011011, // 2	// 50
 0b0000000010001111, // 3
 0b0000000011100110, // 4
 0b0010000001101001, // 5
@@ -112,17 +132,17 @@ static const uint16_t alphafonttable[] PROGMEM =  {
 0b0000000011101111, // 9
 0b0001001000000000, // :
 0b0000101000000000, // ;
-0b0010010000000000, // <
+0b0010010000000000, // <	// 60
 0b0000000011001000, // =
 0b0000100100000000, // >
 0b0001000010000011, // ?
-0b0000001010111011, // @
+0b0000001010111011, // @	// 0x40
 0b0000000011110111, // A
 0b0001001010001111, // B
 0b0000000000111001, // C
 0b0001001000001111, // D
 0b0000000011111001, // E
-0b0000000001110001, // F
+0b0000000001110001, // F	// 70
 0b0000000010111101, // G
 0b0000000011110110, // H
 0b0001001000000000, // I
@@ -132,7 +152,7 @@ static const uint16_t alphafonttable[] PROGMEM =  {
 0b0000010100110110, // M
 0b0010000100110110, // N
 0b0000000000111111, // O
-0b0000000011110011, // P
+0b0000000011110011, // P	// 60 / 0x50
 0b0010000000111111, // Q
 0b0010000011110011, // R
 0b0000000011101101, // S
@@ -142,17 +162,17 @@ static const uint16_t alphafonttable[] PROGMEM =  {
 0b0010100000110110, // W
 0b0010110100000000, // X
 0b0001010100000000, // Y
-0b0000110000001001, // Z
+0b0000110000001001, // Z	// 90
 0b0000000000111001, // [
 0b0010000100000000, // 
 0b0000000000001111, // ]
 0b0000110000000011, // ^
 0b0000000000001000, // _
-0b0000000100000000, // `
+0b0000000100000000, // `	// 0x60
 0b0001000001011000, // a
 0b0010000001111000, // b
 0b0000000011011000, // c
-0b0000100010001110, // d
+0b0000100010001110, // d	// 100
 0b0000100001011000, // e
 0b0000000001110001, // f
 0b0000010010001110, // g
@@ -162,9 +182,9 @@ static const uint16_t alphafonttable[] PROGMEM =  {
 0b0011011000000000, // k
 0b0000000000110000, // l
 0b0001000011010100, // m
-0b0001000001010000, // n
+0b0001000001010000, // n	// 110
 0b0000000011011100, // o
-0b0000000101110000, // p
+0b0000000101110000, // p	// 0x70
 0b0000010010000110, // q
 0b0000000001010000, // r
 0b0010000010001000, // s
@@ -172,18 +192,18 @@ static const uint16_t alphafonttable[] PROGMEM =  {
 0b0000000000011100, // u
 0b0010000000000100, // v
 0b0010100000010100, // w
-0b0010100011000000, // x
+0b0010100011000000, // x	// 120
 0b0010000000001100, // y
 0b0000100001001000, // z
 0b0000100101001001, // {
 0b0001001000000000, // |
 0b0010010010001001, // }
 0b0000010100100000, // ~
-0b0011111111111111,
+0b0011111111111111,			// 127 / 0x7F [systronix] why not the decimal point also?
 
 };
 void Adafruit_LEDBackpack::setBrightness(uint8_t b) {
-  if (b > 15) b = 15;
+  if (b > 15) b = 15;	// max brightness
   Wire.beginTransmission(i2c_addr);
   Wire.write(HT16K33_CMD_BRIGHTNESS | b);
   Wire.endTransmission();  
@@ -192,7 +212,7 @@ void Adafruit_LEDBackpack::setBrightness(uint8_t b) {
 void Adafruit_LEDBackpack::blinkRate(uint8_t b) {
   Wire.beginTransmission(i2c_addr);
   if (b > 3) b = 0; // turn off if not sure
-  
+
   Wire.write(HT16K33_BLINK_CMD | HT16K33_BLINK_DISPLAYON | (b << 1)); 
   Wire.endTransmission();
 }
@@ -208,12 +228,24 @@ void Adafruit_LEDBackpack::begin(uint8_t _addr = 0x70) {
   Wire.beginTransmission(i2c_addr);
   Wire.write(0x21);  // turn on oscillator
   Wire.endTransmission();
+
+// [systronix] next three lines added from https://github.com/adafruit/Adafruit_LED_Backpack/issues/20
+// may or may not be in the correct position; it may be that some delay is needed at the start of this function
+// to ensure that no display setting transactions occur within the 1mS following power on; controller may be on
+// and running before the display hardware turns on and starts the 1mS no-activity period.
+//
+  // ensure RAM is cleared before turning on display
+  clear();
+  writeDisplay();
+
   blinkRate(HT16K33_BLINK_OFF);
-  
+
   setBrightness(15); // max brightness
 }
 
 void Adafruit_LEDBackpack::writeDisplay(void) {
+	i2c_addr=0x70;			//[systronix] why do I have to do this?  If I don't, i2c_addr hods 0x00
+
   Wire.beginTransmission(i2c_addr);
   Wire.write((uint8_t)0x00); // start at address $00
 
@@ -255,7 +287,7 @@ void Adafruit_AlphaNum4::writeDigitAscii(uint8_t n, uint8_t a,  boolean d) {
 }
 
 /******************************* 24 BARGRAPH OBJECT */
-
+#ifndef ALPHANUM4	// [systronix] added so that all of this and the Adafruit_GFX.h library are omitted during the compile because not needed
 Adafruit_24bargraph::Adafruit_24bargraph(void) {
 
 }
@@ -303,7 +335,7 @@ void Adafruit_8x16matrix::drawPixel(int16_t x, int16_t y, uint16_t color) {
  // check rotation, move pixel around if necessary
   switch (getRotation()) {
   case 2:
-    _swap_int16_t(x, y);
+    swap(x, y);
     x = 16 - x - 1;
     break;
   case 3:
@@ -311,7 +343,7 @@ void Adafruit_8x16matrix::drawPixel(int16_t x, int16_t y, uint16_t color) {
     y = 8 - y - 1;
     break;
   case 0:
-    _swap_int16_t(x, y);
+    swap(x, y);
     y = 8 - y - 1;
     break;
   }
@@ -331,58 +363,6 @@ void Adafruit_8x16matrix::drawPixel(int16_t x, int16_t y, uint16_t color) {
   }
 }
 
-/******************************* 16x8 MINI MATRIX OBJECT */
-
-Adafruit_8x16minimatrix::Adafruit_8x16minimatrix(void) : Adafruit_GFX(8, 16) {
-}
-
-void Adafruit_8x16minimatrix::drawPixel(int16_t x, int16_t y, uint16_t color) {
-
-  if ((y < 0) || (x < 0)) return;
-  if ((getRotation() % 2 == 0) && ((y >= 16) || (x >= 8))) return;
-  if ((getRotation() % 2 == 1) && ((x >= 16) || (y >= 8))) return;
-
-
- // check rotation, move pixel around if necessary
-  switch (getRotation()) {
-  case 2:
-    if (y >= 8) {
-      x += 8;
-      y -= 8; 
-    }
-     _swap_int16_t(x, y);
-    break;
-  case 3:
-    x = 16 - x - 1;
-    if (x >= 8) {
-      x -= 8;
-      y += 8; 
-    }
-    break;
-  case 0:
-    y = 16 - y - 1;
-    x = 8 - x - 1;
-    if (y >= 8) {
-      x += 8;
-      y -= 8; 
-    }
-     _swap_int16_t(x, y);
-    break;
-  case 1:
-    y = 8 - y - 1;
-    if (x >= 8) {
-      x -= 8;
-      y += 8; 
-    }
-    break;
-  }
-
-  if (color) {
-    displaybuffer[x] |= 1 << y;
-  } else {
-    displaybuffer[x] &= ~(1 << y);
-  }
-}
 
 /******************************* 8x8 MATRIX OBJECT */
 
@@ -396,7 +376,7 @@ void Adafruit_8x8matrix::drawPixel(int16_t x, int16_t y, uint16_t color) {
  // check rotation, move pixel around if necessary
   switch (getRotation()) {
   case 1:
-    _swap_int16_t(x, y);
+    swap(x, y);
     x = 8 - x - 1;
     break;
   case 2:
@@ -404,7 +384,7 @@ void Adafruit_8x8matrix::drawPixel(int16_t x, int16_t y, uint16_t color) {
     y = 8 - y - 1;
     break;
   case 3:
-    _swap_int16_t(x, y);
+    swap(x, y);
     y = 8 - y - 1;
     break;
   }
@@ -432,7 +412,7 @@ void Adafruit_BicolorMatrix::drawPixel(int16_t x, int16_t y, uint16_t color) {
 
   switch (getRotation()) {
   case 1:
-    _swap_int16_t(x, y);
+    swap(x, y);
     x = 8 - x - 1;
     break;
   case 2:
@@ -440,7 +420,7 @@ void Adafruit_BicolorMatrix::drawPixel(int16_t x, int16_t y, uint16_t color) {
     y = 8 - y - 1;
     break;
   case 3:
-    _swap_int16_t(x, y);
+    swap(x, y);
     y = 8 - y - 1;
     break;
   }
@@ -463,7 +443,7 @@ void Adafruit_BicolorMatrix::drawPixel(int16_t x, int16_t y, uint16_t color) {
     displaybuffer[y] &= ~(1 << x) & ~(1 << (x+8));
   }
 }
-
+#endif	// [systronix] #ifndef ALPHANUM4
 /******************************* 7 SEGMENT OBJECT */
 
 Adafruit_7segment::Adafruit_7segment(void) {
